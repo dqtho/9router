@@ -233,6 +233,7 @@ export default function ProviderLimits() {
   const [connectionsLoading, setConnectionsLoading] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
   const [togglingId, setTogglingId] = useState(null);
+  const [refreshingTokenId, setRefreshingTokenId] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedConnection, setSelectedConnection] = useState(null);
   const [proxyPools, setProxyPools] = useState([]);
@@ -388,6 +389,36 @@ export default function ProviderLimits() {
       setLastUpdated(new Date());
     },
     [fetchQuota],
+  );
+
+  const handleRefreshToken = useCallback(
+    async (connection) => {
+      setRefreshingTokenId(connection.id);
+      setErrors((prev) => ({ ...prev, [connection.id]: null }));
+
+      try {
+        const response = await fetch(`/api/providers/${connection.id}/refresh-token`, {
+          method: "POST",
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(data.error || response.statusText || "Token refresh failed");
+        }
+
+        await fetchConnections(page);
+        await fetchQuota(connection.id, connection.provider);
+        setLastUpdated(new Date());
+      } catch (error) {
+        setErrors((prev) => ({
+          ...prev,
+          [connection.id]: `Token refresh failed: ${error.message}`,
+        }));
+      } finally {
+        setRefreshingTokenId(null);
+      }
+    },
+    [fetchConnections, fetchQuota, page],
   );
 
   const handleDeleteConnection = useCallback(
@@ -974,7 +1005,9 @@ export default function ProviderLimits() {
 
           // Use table layout for all providers
           const isInactive = conn.isActive === false;
-          const rowBusy = deletingId === conn.id || togglingId === conn.id;
+          const isRefreshingToken = refreshingTokenId === conn.id;
+          const canRefreshToken = conn.hasAccessToken && conn.hasRefreshToken;
+          const rowBusy = deletingId === conn.id || togglingId === conn.id || isRefreshingToken;
 
           return (
             <Card
@@ -1021,6 +1054,20 @@ export default function ProviderLimits() {
                         className={`material-symbols-outlined text-[18px] text-text-muted ${isLoading ? "animate-spin" : ""}`}
                       >
                         refresh
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRefreshToken(conn)}
+                      disabled={isLoading || rowBusy || !canRefreshToken}
+                      aria-label="Refresh token"
+                      className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors disabled:opacity-50"
+                      title={canRefreshToken ? "Refresh token" : "No refresh token"}
+                    >
+                      <span
+                        className={`material-symbols-outlined text-[18px] text-text-muted ${isRefreshingToken ? "animate-spin" : ""}`}
+                      >
+                        key
                       </span>
                     </button>
                     <button

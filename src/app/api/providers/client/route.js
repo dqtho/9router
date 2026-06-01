@@ -31,6 +31,8 @@ function maskName(name) {
 function sanitize(c) {
   const safe = {};
   for (const f of SAFE_FIELDS) if (c[f] !== undefined) safe[f] = c[f];
+  safe.hasAccessToken = Boolean(c.accessToken);
+  safe.hasRefreshToken = Boolean(c.refreshToken);
   if (safe.name) safe.name = maskName(safe.name);
   if (c.providerSpecificData) {
     const psd = {};
